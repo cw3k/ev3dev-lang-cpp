@@ -3,6 +3,8 @@
 #include <stdexcept>
 
 #include <ev3dev.h>
+#include <iostream>
+
 
 /*
 -----------------------------------------------------------------------------
@@ -37,6 +39,12 @@ Whenever an obstacle is bumped, robot backs away and apologises.
 
 namespace ev3 = ev3dev;
 
+std::ostream& operator<<(std::ostream &os, const std::set<std::string> &ss) {
+    os << "[ ";
+    for(const auto &s : ss) os << s << " ";
+    return os << "]";
+}
+
 //---------------------------------------------------------------------------
 void precondition(bool cond, const std::string &msg) {
     if (!cond) throw std::runtime_error(msg);
@@ -56,12 +64,178 @@ std::function<void(bool)> roll(Motor &motor, Leds &leds, int dir) {
     };
 }
 
+template <class Motor, class Leds>
+std::function<void(bool)> roll(Motor &motor, Leds &leds, int dir, std::string color) {
+    return [&motor, &leds, dir, &color](bool state) {
+        if (state) {
+            motor.set_speed_sp(900 * dir).run_forever();
+            ev3::led::set_color(leds, dir > 0 ? ev3::led::green : ev3::led::red);
+            ev3::sound::speak(color);
+            std::cout << "Color Detected: " << color <<"\n";
+//            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        } else {
+            motor.set_stop_action("brake").stop();
+            for(auto led : leds) led->off();
+        }
+    };
+}
+
+enum colorIndex
+{
+    BLACK,
+    BLUE,
+    GREEN,
+    PURPLE,
+    YELLOW,
+    RED,
+    PINK,
+    NO_COLOR,
+    NUM = NO_COLOR
+};
+
+bool numberInRange(uint16_t pNumber, uint16_t lowValue, uint16_t highValue, uint8_t buffer = 0)
+{
+    bool inRange = false;
+    inRange = (pNumber >= (lowValue - buffer)) && (pNumber <= (highValue + buffer));
+//    std::cout << "Low Value: " << lowValue - buffer << " Num: " << pNumber << " High value: " << highValue + buffer << " inRange: " << inRange << std::endl;
+    return inRange;
+}
+
+static constexpr uint8_t idxBlack    {0};
+static constexpr uint8_t idxBlue     {1};
+static constexpr uint8_t idxGreen    {2};
+static constexpr uint8_t idxPurple   {3};
+static constexpr uint8_t idxYellow   {4};
+static constexpr uint8_t idxRed      {5};
+static constexpr uint8_t idxPink     {6};
+
+static constexpr int numColors          {7};
+static constexpr int rgbHighLowIndices  {6};
+
+bool rgbMatch(std::tuple<int, int, int> rgb, uint8_t const pColorIndex, uint8_t const buffer = 0)
+{
+//    std::cout << " Color: " << pColorIndex;
+//    printf("Color: %2d ", pColorIndex);
+    static const std::array<std::array<uint16_t, rgbHighLowIndices>, numColors> clrTable
+    {
+        20, 22, 22, 23, 29,  31,
+        43, 48,155,166,260, 290,
+        63, 71,156,175, 76,  86,
+        89,106, 54, 73,148, 168,
+        261,272,239,257,260, 264,
+        250,257, 32, 35, 48,  51,
+        285,293,224,248,382, 401
+    };
+
+    static constexpr uint8_t idxRLow     {0};
+    static constexpr uint8_t idxRHigh    {1};
+    static constexpr uint8_t idxGLow     {2};
+    static constexpr uint8_t idxGHigh    {3};
+    static constexpr uint8_t idxBLow     {4};
+    static constexpr uint8_t idxBHigh    {5};
+
+    uint16_t r = std::get<0>(rgb);
+    uint16_t g = std::get<1>(rgb);
+    uint16_t b = std::get<2>(rgb);
+
+    bool match = false;
+    match = (
+            numberInRange(r, clrTable[pColorIndex][idxRLow], clrTable[pColorIndex][idxRHigh], buffer) &&
+            numberInRange(g, clrTable[pColorIndex][idxGLow], clrTable[pColorIndex][idxGHigh], buffer) &&
+            numberInRange(b, clrTable[pColorIndex][idxBLow], clrTable[pColorIndex][idxBHigh], buffer)
+            );
+
+//    std::cout << " Match: " << match << " Color: " << pColorIndex << " RGB Column: " << idxRLow << ", " << idxRHigh << ", " << idxGLow << ", " << idxGHigh << ", " << idxBLow << ", " << idxBHigh <<
+//    std::cout << " Match: " << match << " Color: " << pColorIndex << std::endl;
+//    std::cout << " Match: " << match << std::endl;
+    return match;
+}
+
+uint8_t getColor(std::tuple<int, int, int> rgb)
+{
+    static int colorDetected = colorIndex::NO_COLOR;
+
+    static const int bffr{50};
+
+    if      (rgbMatch(rgb, 0, bffr))  {colorDetected = colorIndex::BLACK;}
+    else if (rgbMatch(rgb, 1, bffr))   {colorDetected = colorIndex::BLUE;}
+    else if (rgbMatch(rgb, 2, bffr))  {colorDetected = colorIndex::GREEN;}
+    else if (rgbMatch(rgb, 3, bffr)) {colorDetected = colorIndex::PURPLE;}
+    else if (rgbMatch(rgb, 4, bffr)) {colorDetected = colorIndex::YELLOW;}
+    else if (rgbMatch(rgb, 5, bffr))    {colorDetected = colorIndex::RED;}
+    else if (rgbMatch(rgb, 6, bffr))   {colorDetected = colorIndex::PINK;}
+    else                                                                             {colorDetected = colorIndex::NO_COLOR;}
+
+    return colorDetected;
+}
+
+std::string getColorString(uint8_t colorIndex)
+{
+//    cout << "Get Color String Called\n";
+    std::string colorDetected;
+    switch (colorIndex)
+    {
+        case (colorIndex::BLACK):
+        {
+            colorDetected = "Black";
+            break;
+        }
+        case (colorIndex::BLUE):
+        {
+            colorDetected = "Blue";
+            break;
+        }
+        case (colorIndex::GREEN):
+        {
+            colorDetected = "Green";
+            break;
+        }
+        case (colorIndex::PURPLE):
+        {
+            colorDetected = "Purple";
+            break;
+        }
+        case (colorIndex::YELLOW):
+        {
+            colorDetected = "Yellow";
+            break;
+        }
+        case (colorIndex::RED):
+        {
+            colorDetected = "Red";
+            break;
+        }
+        case (colorIndex::PINK):
+        {
+            colorDetected = "Pink";
+            break;
+        }
+        case (colorIndex::NO_COLOR):
+        {
+            colorDetected = "No color";
+            break;
+        }
+        default:
+        {
+            colorDetected = "Error";
+            break;
+        }
+    }
+
+    std::cout <<"Color Detected: " << colorDetected << "\n";
+
+    return colorDetected;
+}
+
 //---------------------------------------------------------------------------
 int main() {
     ev3::large_motor lmotor(ev3::OUTPUT_B);
     ev3::large_motor rmotor(ev3::OUTPUT_C);
     ev3::remote_control rc;
     ev3::touch_sensor   ts;
+    ev3::color_sensor cs;
+
+    cs.set_mode(ev3::color_sensor::mode_rgb_raw);
 
     precondition(lmotor.connected(), "Motor on outB is not connected");
     precondition(rmotor.connected(), "Motor on outC is not connected");
@@ -76,9 +250,11 @@ int main() {
     // Enter event processing loop
     while (!ev3::button::enter.pressed()) {
         rc.process();
+        getColorString(getColor(cs.raw()));
 
         // Backup when an obstacle is bumped
         if (ts.is_pressed()) {
+            std::cout << "Touch Sensor Button Pressed\n";
             ev3::sound::speak("Oops, excuse me!");
 
             lmotor.set_stop_action("brake").stop();

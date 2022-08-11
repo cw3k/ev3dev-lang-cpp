@@ -9,6 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(ev3dev-lang-cpp)
 
+set(CMAKE_C_COMPILER "arm-linux-gnueabi-gcc")
+set(CMAKE_CC_COMPILER "arm-linux-gnueabi-gcc")
+set(CMAKE_CXX_COMPILER "arm-linux-gnueabi-g++")
+
 # Is this used directly or via add_subdirectory()
 set(EV3DEV_LANG_CPP_MASTER_PROJECT OFF)
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -30,6 +34,8 @@ target_compile_definitions(ev3dev PUBLIC
     _GLIBCXX_USE_NANOSLEEP
     EV3DEV_PLATFORM_${EV3DEV_PLATFORM}
     )
+
+target_link_options(ev3dev PUBLIC -static -static-libgcc -static-libstdc++ -static)
 target_link_libraries(ev3dev PUBLIC pthread)
 
 function(add_ev3_executable target sources)
