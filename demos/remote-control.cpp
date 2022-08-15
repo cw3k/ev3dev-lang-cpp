@@ -80,7 +80,7 @@ std::function<void(bool)> roll(Motor &motor1, Motor &motor2, int distance_rot, i
     };
 }
 
-enum colorIndex
+enum mapColors
 {
     BLACK,
     BLUE,
@@ -91,6 +91,20 @@ enum colorIndex
     PINK,
     NO_COLOR,
     NUM = NO_COLOR
+};
+uint8_t const mapRows{9};
+uint8_t const mapColumns{4};
+static const std::array<std::array<mapColors, mapRows>, mapColumns> colorMap
+{
+    mapColors::BLUE,    mapColors::PURPLE,  mapColors::RED,     mapColors::BLUE,
+    mapColors::PINK,    mapColors::BLACK,   mapColors::PINK,    mapColors::BLACK,
+    mapColors::YELLOW,  mapColors::BLACK,   mapColors::BLACK,   mapColors::RED,
+    mapColors::PURPLE,  mapColors::BLUE,    mapColors::YELLOW,  mapColors::RED,
+    mapColors::BLACK,   mapColors::BLACK,   mapColors::PURPLE,  mapColors::PURPLE,
+    mapColors::PINK,    mapColors::YELLOW,  mapColors::BLACK,   mapColors::PINK,
+    mapColors::PURPLE,  mapColors::BLACK,   mapColors::RED,     mapColors::PURPLE,
+    mapColors::GREEN,   mapColors::PURPLE,  mapColors::BLUE,    mapColors::BLACK,
+    mapColors::BLUE,    mapColors::BLACK,   mapColors::GREEN,   mapColors::BLUE
 };
 
 bool numberInRange(uint16_t pNumber, uint16_t lowValue, uint16_t highValue, uint8_t buffer = 0)
@@ -153,18 +167,18 @@ bool rgbMatch(std::tuple<int, int, int> rgb, uint8_t const pColorIndex, uint8_t 
 
 uint8_t getColor(std::tuple<int, int, int> rgb)
 {
-    static int colorDetected = colorIndex::NO_COLOR;
+    static int colorDetected = mapColors::NO_COLOR;
 
     static const int bffr{50};
 
-    if      (rgbMatch(rgb, 0, bffr))  {colorDetected = colorIndex::BLACK;}
-    else if (rgbMatch(rgb, 1, bffr))   {colorDetected = colorIndex::BLUE;}
-    else if (rgbMatch(rgb, 2, bffr))  {colorDetected = colorIndex::GREEN;}
-    else if (rgbMatch(rgb, 3, bffr)) {colorDetected = colorIndex::PURPLE;}
-    else if (rgbMatch(rgb, 4, bffr)) {colorDetected = colorIndex::YELLOW;}
-    else if (rgbMatch(rgb, 5, bffr))    {colorDetected = colorIndex::RED;}
-    else if (rgbMatch(rgb, 6, bffr))   {colorDetected = colorIndex::PINK;}
-    else                                                                             {colorDetected = colorIndex::NO_COLOR;}
+    if      (rgbMatch(rgb, 0, bffr)) {colorDetected = mapColors::BLACK;}
+    else if (rgbMatch(rgb, 1, bffr)) {colorDetected = mapColors::BLUE;}
+    else if (rgbMatch(rgb, 2, bffr)) {colorDetected = mapColors::GREEN;}
+    else if (rgbMatch(rgb, 3, bffr)) {colorDetected = mapColors::PURPLE;}
+    else if (rgbMatch(rgb, 4, bffr)) {colorDetected = mapColors::YELLOW;}
+    else if (rgbMatch(rgb, 5, bffr)) {colorDetected = mapColors::RED;}
+    else if (rgbMatch(rgb, 6, bffr)) {colorDetected = mapColors::PINK;}
+    else                             {colorDetected = mapColors::NO_COLOR;}
 
     return colorDetected;
 }
@@ -175,42 +189,42 @@ std::string getColorString(uint8_t colorIndex)
     std::string colorDetected;
     switch (colorIndex)
     {
-        case (colorIndex::BLACK):
+        case (mapColors::BLACK):
         {
             colorDetected = "Black";
             break;
         }
-        case (colorIndex::BLUE):
+        case (mapColors::BLUE):
         {
             colorDetected = "Blue";
             break;
         }
-        case (colorIndex::GREEN):
+        case (mapColors::GREEN):
         {
             colorDetected = "Green";
             break;
         }
-        case (colorIndex::PURPLE):
+        case (mapColors::PURPLE):
         {
             colorDetected = "Purple";
             break;
         }
-        case (colorIndex::YELLOW):
+        case (mapColors::YELLOW):
         {
             colorDetected = "Yellow";
             break;
         }
-        case (colorIndex::RED):
+        case (mapColors::RED):
         {
             colorDetected = "Red";
             break;
         }
-        case (colorIndex::PINK):
+        case (mapColors::PINK):
         {
             colorDetected = "Pink";
             break;
         }
-        case (colorIndex::NO_COLOR):
+        case (mapColors::NO_COLOR):
         {
             colorDetected = "No color";
             break;
