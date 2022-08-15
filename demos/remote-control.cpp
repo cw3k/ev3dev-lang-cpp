@@ -65,16 +65,16 @@ std::function<void(bool)> roll(Motor &motor, Leds &leds, int dir) {
 }
 
 template <class Motor, class Leds>
-std::function<void(bool)> roll(Motor &motor, Leds &leds, int dir, std::string color) {
-    return [&motor, &leds, dir, &color](bool state) {
+std::function<void(bool)> roll(Motor &motor1, Motor &motor2, int distance_rot, int speed, int dir1, int dir2, Leds &leds, int delay_ms) {
+    return [&motor1, &motor2, dir1, dir2, distance_rot, speed, &leds, delay_ms](bool state) {
         if (state) {
-            motor.set_speed_sp(900 * dir).run_forever();
-            ev3::led::set_color(leds, dir > 0 ? ev3::led::green : ev3::led::red);
-            ev3::sound::speak(color);
-            std::cout << "Color Detected: " << color <<"\n";
-//            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            motor1.set_position_sp(distance_rot * dir1).set_speed_sp(speed).run_to_rel_pos();
+            motor2.set_position_sp(distance_rot * dir2).set_speed_sp(speed).run_to_rel_pos();
+            ev3::led::set_color(leds, dir1 > 0 ? ev3::led::green : ev3::led::red);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         } else {
-            motor.set_stop_action("brake").stop();
+//            motor1.set_stop_action("brake").stop();
+//            motor2.set_stop_action("brake").stop();
             for(auto led : leds) led->off();
         }
     };
@@ -233,47 +233,28 @@ int main() {
     ev3::large_motor rmotor(ev3::OUTPUT_C);
     ev3::remote_control rc;
     ev3::touch_sensor   ts;
-    ev3::color_sensor cs;
+    ev3::color_sensor   cs;
+
+//    lmotor.set_position_sp(100);
+//    lmotor.run_to_rel_pos();
 
     cs.set_mode(ev3::color_sensor::mode_rgb_raw);
 
     precondition(lmotor.connected(), "Motor on outB is not connected");
     precondition(rmotor.connected(), "Motor on outC is not connected");
     precondition(rc.connected(),     "Infrared sensor is not connected");
-    precondition(ts.connected(),     "Touch sensor is not connected");
 
-    rc.on_red_up    = roll(lmotor, ev3::led::left,   1);
-    rc.on_red_down  = roll(lmotor, ev3::led::left,  -1);
-    rc.on_blue_up   = roll(rmotor, ev3::led::right,  1);
-    rc.on_blue_down = roll(rmotor, ev3::led::right, -1);
+    rc.on_red_up    = roll(lmotor, rmotor, 400, 450,  1,   1, ev3::led::left, 2000);
+    rc.on_red_down  = roll(lmotor, rmotor, 400, 450, -1,  -1, ev3::led::left, 2000);
+    rc.on_blue_up   = roll(lmotor, rmotor, 10, 450, -1,  1, ev3::led::right, 1000);
+    rc.on_blue_down = roll(lmotor, rmotor, 10, 450, 1, -1, ev3::led::right, 1000);
 
     // Enter event processing loop
     while (!ev3::button::enter.pressed()) {
-        rc.process();
-        getColorString(getColor(cs.raw()));
-
-        // Backup when an obstacle is bumped
-        if (ts.is_pressed()) {
-            std::cout << "Touch Sensor Button Pressed\n";
-            ev3::sound::speak("Oops, excuse me!");
-
-            lmotor.set_stop_action("brake").stop();
-            rmotor.set_stop_action("brake").stop();
-
-            // Turn red lights on
-            ev3::led::set_color(ev3::led::left,  ev3::led::red);
-            ev3::led::set_color(ev3::led::right, ev3::led::red);
-
-            // Run both motors backwards for 0.5 seconds
-            lmotor.set_time_sp(500).set_speed_sp(-900).run_timed();
-            rmotor.set_time_sp(500).set_speed_sp(-900).run_timed();
-
-            // Wait 0.5 seconds while motors are rolling
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-            ev3::led::all_off();
+        if(rc.process())
+        {
+            getColorString(getColor(cs.raw()));
         }
-
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
