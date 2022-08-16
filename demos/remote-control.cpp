@@ -73,8 +73,8 @@ std::function<void(bool)> roll(Motor &motor1, Motor &motor2, int distance_rot, i
             ev3::led::set_color(leds, dir1 > 0 ? ev3::led::green : ev3::led::red);
             std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         } else {
-//            motor1.set_stop_action("brake").stop();
-//            motor2.set_stop_action("brake").stop();
+            motor1.set_stop_action("brake").stop();
+            motor2.set_stop_action("brake").stop();
             for(auto led : leds) led->off();
         }
     };
@@ -94,7 +94,7 @@ enum mapColors
 };
 uint8_t const mapRows{9};
 uint8_t const mapColumns{4};
-static const std::array<std::array<mapColors, mapRows>, mapColumns> colorMap
+static const int colorMap[mapRows][mapColumns]
 {
     mapColors::BLUE,    mapColors::PURPLE,  mapColors::RED,     mapColors::BLUE,
     mapColors::PINK,    mapColors::BLACK,   mapColors::PINK,    mapColors::BLACK,
@@ -165,9 +165,9 @@ bool rgbMatch(std::tuple<int, int, int> rgb, uint8_t const pColorIndex, uint8_t 
     return match;
 }
 
-uint8_t getColor(std::tuple<int, int, int> rgb)
+mapColors getColor(std::tuple<int, int, int> rgb)
 {
-    static int colorDetected = mapColors::NO_COLOR;
+    static mapColors colorDetected = mapColors::NO_COLOR;
 
     static const int bffr{50};
 
@@ -178,7 +178,7 @@ uint8_t getColor(std::tuple<int, int, int> rgb)
     else if (rgbMatch(rgb, 4, bffr)) {colorDetected = mapColors::YELLOW;}
     else if (rgbMatch(rgb, 5, bffr)) {colorDetected = mapColors::RED;}
     else if (rgbMatch(rgb, 6, bffr)) {colorDetected = mapColors::PINK;}
-    else                             {colorDetected = mapColors::NO_COLOR;}
+    else                                              {colorDetected = mapColors::NO_COLOR;}
 
     return colorDetected;
 }
@@ -236,9 +236,41 @@ std::string getColorString(uint8_t colorIndex)
         }
     }
 
-    std::cout <<"Color Detected: " << colorDetected << "\n";
+//    std::cout <<"Color Detected: " << colorDetected << "\n";
 
     return colorDetected;
+}
+
+const std::array<float, mapRows>& robotLocalize(mapColors currColor)
+{
+    static std::array<float, mapRows> mapLocalizationDistribution{};
+    static const float uniformDistValue = (1.0 / mapRows);
+    static const float measurementAccuracyLikelihood{0.9};
+    static float normalizer{0};
+
+    if(currColor == mapColors::NO_COLOR)
+    {
+        // reset distribution
+        std::fill(mapLocalizationDistribution.begin(), mapLocalizationDistribution.end(), uniformDistValue);
+        for (int i = 0; i < mapRows; ++i)
+        {
+            std::cout << "index: " << i << " probability: " << mapLocalizationDistribution[i] << std::endl;
+        }
+    } else {
+        normalizer = 0;
+        for (int i = 0; i < mapRows; ++i)
+        {
+            mapLocalizationDistribution[i] = ((currColor == colorMap[i][1]) ? (measurementAccuracyLikelihood * mapLocalizationDistribution[i]) : ((1 - measurementAccuracyLikelihood) * mapLocalizationDistribution[i]));
+            normalizer += mapLocalizationDistribution[i];
+//            std::cout << "index: " << i << " MapColor at index: " <<  getColorString(colorMap[i][1]) << "\t probability: " << mapLocalizationDistribution[i] << std::endl;
+        }
+        for (int i = 0; i < mapRows; ++i)
+        {
+            mapLocalizationDistribution[i] = mapLocalizationDistribution[i] / normalizer;
+            std::cout << "index: " << i << " MapColor at index: " <<  getColorString(colorMap[i][1]) << "\t probability: " << mapLocalizationDistribution[i] << std::endl;
+        }
+    }
+    return mapLocalizationDistribution;
 }
 
 //---------------------------------------------------------------------------
@@ -249,9 +281,6 @@ int main() {
     ev3::touch_sensor   ts;
     ev3::color_sensor   cs;
 
-//    lmotor.set_position_sp(100);
-//    lmotor.run_to_rel_pos();
-
     cs.set_mode(ev3::color_sensor::mode_rgb_raw);
 
     precondition(lmotor.connected(), "Motor on outB is not connected");
@@ -260,14 +289,35 @@ int main() {
 
     rc.on_red_up    = roll(lmotor, rmotor, 400, 450,  1,   1, ev3::led::left, 2000);
     rc.on_red_down  = roll(lmotor, rmotor, 400, 450, -1,  -1, ev3::led::left, 2000);
-    rc.on_blue_up   = roll(lmotor, rmotor, 10, 450, -1,  1, ev3::led::right, 1000);
-    rc.on_blue_down = roll(lmotor, rmotor, 10, 450, 1, -1, ev3::led::right, 1000);
+    rc.on_blue_up   = roll(lmotor, rmotor, 10, 450, -1,  1, ev3::led::right, 2000);
+    rc.on_blue_down = roll(lmotor, rmotor, 10, 450, 1, -1, ev3::led::right, 2000);
+
+    std::cout << "Print Map: \n";
+    for(int i = 0; i < mapRows; ++i)
+    {
+        for (int j = 0; j < mapColumns; ++j) {
+            std::cout << getColorString(colorMap[i][j]) << "\t";
+        }
+        std::cout << std::endl;
+    }
+
+    //initialize localization distribution
+    mapColors colorRead = mapColors::NO_COLOR;
+    getColorString(colorRead);
+    auto robotPositionDistribution = robotLocalize(colorRead);
+
+    // read initial position
+    colorRead = getColor(cs.raw());
+    std::cout << "Initial color read: " << getColorString(colorRead) << "\n";
+    robotPositionDistribution = robotLocalize(colorRead);
 
     // Enter event processing loop
     while (!ev3::button::enter.pressed()) {
         if(rc.process())
         {
-            getColorString(getColor(cs.raw()));
+            colorRead = getColor(cs.raw());
+            std::cout << "Color Detected: " << getColorString(colorRead) << "\n";
+            robotPositionDistribution = robotLocalize(colorRead);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
